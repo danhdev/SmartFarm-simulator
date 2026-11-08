@@ -1,0 +1,20 @@
+init_config:
+instances:
+  - hosts:
+      - mongo:27017
+    database: MUGVN-Hackathon
+    username: datadog
+    password: "%%env_MONGO_DATADOG_PASSWORD%%"
+    dbm: true
+    cluster_name: smartfarm-local
+    reported_database_hostname: smartfarm-mongo
+    query_metrics:
+      enabled: true
+    database_autodiscovery:
+      enabled: true
+      include:
+        - '^MUGVN-Hackathon$'
+    collections_indexes_stats: true
+    options:
+      authSource: admin
+      directConnection: "true"

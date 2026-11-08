@@ -1,0 +1,13 @@
+init_config:
+instances:
+  - openmetrics_endpoint: http://keycloak:9000/metrics
+    namespace: smartfarm_keycloak
+    metrics:
+      - base_.*
+      - vendor_.*
+  - openmetrics_endpoint: http://emqx:18083/api/v5/prometheus/stats
+    namespace: smartfarm_emqx
+    metrics:
+      - emqx_.*
+    username: "%%env_EMQX_METRICS_API_KEY%%"
+    password: "%%env_EMQX_METRICS_API_SECRET%%"

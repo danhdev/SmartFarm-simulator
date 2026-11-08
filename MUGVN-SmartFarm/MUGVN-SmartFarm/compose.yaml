@@ -1,0 +1,205 @@
+name: mugvn-smartfarm
+
+x-dotnet-tracing: &dotnet-tracing
+  DD_AGENT_HOST: datadog-agent
+  DD_ENV: local
+  DD_VERSION: ${SMARTFARM_VERSION:-local}
+  DD_TRACE_SAMPLE_RATE: ${SMARTFARM_TRACE_SAMPLE_RATE:-1.0}
+  DD_TRACE_PROPAGATION_STYLE: tracecontext,datadog
+  DD_LOGS_INJECTION: "true"
+  DD_TRACE_HTTP_SERVER_TAG_QUERY_STRING: "false"
+  DD_TRACE_HTTP_CLIENT_TAG_QUERY_STRING: "false"
+  DD_TRACE_REMOVE_INTEGRATION_SERVICE_NAMES_ENABLED: "true"
+
+services:
+  mongo:
+    image: quay.io/mongodb/mongodb-atlas-local@sha256:66ea441c37dd51e985974596a6ea9516c462846778d80dad76a8e4416244c174
+    entrypoint: [/bin/sh, /observability/start-mongo.sh]
+    command: [/usr/local/bin/runner, server]
+    # The preserved single-node replica set identifies its member by this hostname.
+    hostname: ce8dad09ce13
+    ports:
+      - "127.0.0.1:27018:27017"
+    environment:
+      MONGODB_LOAD_SAMPLE_DATA: "false"
+      MONGO_DATADOG_PASSWORD: ${MONGO_DATADOG_PASSWORD:?Set MONGO_DATADOG_PASSWORD in .env}
+    volumes:
+      - ./datadog/mongo:/observability:ro
+      - mongo-config:/data/configdb
+      - mongo-data:/data/db
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"mongodb","service":"smartfarm-mongo"}]'
+
+  emqx:
+    image: emqx/emqx-enterprise@sha256:135116400e11b25224350b2e55c874f4e224d357b593fb554ca1b1f398c631ac
+    hostname: node1.emqx.local
+    environment:
+      EMQX_NODE_NAME: emqx@node1.emqx.local
+      EMQX_RETAINER__BACKEND__STORAGE_TYPE: disc
+      EMQX_OPENTELEMETRY__EXPORTER__ENDPOINT: http://datadog-agent:4317
+      EMQX_OPENTELEMETRY__TRACES__ENABLE: "true"
+      EMQX_OPENTELEMETRY__TRACES__FILTER__TRACE_ALL: "true"
+      OTEL_SERVICE_NAME: smartfarm-emqx
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local,service.version=${SMARTFARM_VERSION:-local}
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"emqx","service":"smartfarm-emqx"}]'
+    healthcheck:
+      test: [CMD, /opt/emqx/bin/emqx, ctl, status]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+
+  redis:
+    image: redis@sha256:de1068af6f552240dfab67bcc9bfef99bfc60f776bb4580ef077ea4c8c97e848
+    command: [redis-server, --appendonly, "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"redis","service":"smartfarm-redis"}]'
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  keycloak:
+    image: quay.io/keycloak/keycloak@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
+    command: [start-dev, --import-realm]
+    ports:
+      - "127.0.0.1:8085:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_HOSTNAME: http://localhost:8085
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_TRACING_ENABLED: "true"
+      KC_TRACING_ENDPOINT: http://datadog-agent:4317
+      KC_TRACING_SERVICE_NAME: smartfarm-keycloak
+      KC_TRACING_SAMPLER_TYPE: parentbased_traceidratio
+      KC_TRACING_SAMPLER_RATIO: ${SMARTFARM_TRACE_SAMPLE_RATE:-1.0}
+      KC_TRACING_RESOURCE_ATTRIBUTES: deployment.environment=local,service.version=${SMARTFARM_VERSION:-local}
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./Infrastructure/keycloak/smartfarm-realm.json:/opt/keycloak/data/import/smartfarm-realm.json:ro
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"keycloak","service":"smartfarm-keycloak"}]'
+
+  api:
+    image: smartfarm-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:5198:8080"
+    environment:
+      <<: *dotnet-tracing
+      DD_SERVICE: smartfarm-api
+      DD_TRACE_SAMPLING_RULES: '[{"resource":"GET /health/*","sample_rate":0},{"resource":"* /hubs/telemetry*","sample_rate":0},{"sample_rate":${SMARTFARM_TRACE_SAMPLE_RATE:-1.0}}]'
+      Logging__LogLevel__Microsoft.AspNetCore.Hosting.Diagnostics: Warning
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Mongo__ConnectionString: mongodb://mongo:27017/?directConnection=true
+      Redis__ConnectionString: redis:6379,abortConnect=false,connectTimeout=1000,asyncTimeout=1000
+      Keycloak__Authority: http://localhost:8085/realms/smartfarm
+      Keycloak__MetadataAddress: http://keycloak:8080/realms/smartfarm/.well-known/openid-configuration
+    depends_on:
+      - mongo
+      - redis
+      - keycloak
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"csharp","service":"smartfarm-api"}]'
+
+  ingestion:
+    image: smartfarm-ingestion:local
+    build:
+      context: .
+      dockerfile: Ingestion.Dockerfile
+    environment:
+      <<: *dotnet-tracing
+      DD_SERVICE: smartfarm-ingestion
+      DOTNET_ENVIRONMENT: Development
+      Mongo__ConnectionString: mongodb://mongo:27017/?directConnection=true
+      Redis__ConnectionString: redis:6379,abortConnect=false,connectTimeout=1000,asyncTimeout=1000
+      Mqtt__Host: emqx
+    depends_on:
+      - api
+      - emqx
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"csharp","service":"smartfarm-ingestion"}]'
+
+  frontend:
+    image: smartfarm-frontend:local
+    platform: linux/amd64
+    build:
+      context: ../../SmartFarm-FE
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:5173:80"
+    environment:
+      SMARTFARM_VERSION: ${SMARTFARM_VERSION:-local}
+      SMARTFARM_TRACE_SAMPLE_RATE: ${SMARTFARM_TRACE_SAMPLE_RATE:-1.0}
+    depends_on:
+      - api
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nginx","service":"smartfarm-frontend"}]'
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1/]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  datadog-agent:
+    profiles: [observability]
+    image: registry.datadoghq.com/agent:7.85.2@sha256:17bf6cf89c24696110f2807cf7146080efad18c20f91c6515d6fc382c55d7b42
+    environment:
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_ENV: local
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_PROCESSING_RULES: '[{"type":"mask_sequences","name":"redact_query_credentials","pattern":"(?i)(?:access_token|refresh_token|id_token|code|password)=[^&\\s\"]+","replace_placeholder":"[REDACTED_QUERY_CREDENTIAL]"}]'
+      DD_APM_ENABLED: "true"
+      DD_APM_OBFUSCATION_HTTP_REMOVE_QUERY_STRING: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: 0.0.0.0:4317
+      HOST_PROC: /proc
+      MONGO_DATADOG_PASSWORD: ${MONGO_DATADOG_PASSWORD:?Set MONGO_DATADOG_PASSWORD in .env}
+      EMQX_METRICS_API_KEY: ${EMQX_METRICS_API_KEY:-}
+      EMQX_METRICS_API_SECRET: ${EMQX_METRICS_API_SECRET:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+      - ./datadog/conf.d:/conf.d:ro
+
+volumes:
+  mongo-config:
+    external: true
+    name: 8fd3d92100854eb75227b7cf77a97b83c02f404ce63a666cb1a1931c11f0f410
+  mongo-data:
+    external: true
+    name: 29283808306d987abb02fc2da3d53d260bc223505ec640177650254b63a3b97b
+  emqx-data:
+    external: true
+    name: b97e87efd20780b447d33e09b06ca7fcd55d53afceb603bb8d778895be6e6f2f
+  emqx-log:
+    external: true
+    name: c8480a4ac284708cab426ec444d40486fcca032536d77f473ecb84191b051032
+  redis-data:
+    external: true
+    name: redis-data
+  keycloak-data:
+    external: true
+    name: mugvn-smartfarm_keycloak-data

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+<PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><OutputType>Exe</OutputType><UserSecretsId>smartfarm-ingestion-development</UserSecretsId></PropertyGroup>
+<ItemGroup><PackageReference Include="Datadog.Trace" Version="3.57.0" /><PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" /><PackageReference Include="MQTTnet" Version="5.1.0.1559" /><ProjectReference Include="../Contracts/SmartFarm.Contracts.csproj" /><ProjectReference Include="../Infrastructure/SmartFarm.Infrastructure.csproj" /></ItemGroup>
+<ItemGroup><None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" /><None Update="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+</Project>

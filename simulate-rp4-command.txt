@@ -1,0 +1,45 @@
+# Run each block in a separate host terminal.
+# When SSH asks for the pi user's password, enter: 123456
+# Each Pi's configuration/pi4-N.json has "reset": false by default, so a
+# normal launch resumes saved replay progress. To replay from start_position,
+# change that Pi's "reset" to true, then run this host command before starting
+# its replay (the guest must be running and reachable):
+# make sync-replay-config INSTANCE=pi4-1
+# With "reset": true, EVERY launch clears that Pi's SQLite cursor and pending
+# MQTT outbox, then replays through end_position. Set it back to false and
+# sync again to resume progress on later launches.
+# If make ssh-pi4-N reports a busy SSH port while that Pi is already running,
+# connect directly instead: ssh -F /dev/null -p 5555 pi@127.0.0.1
+# Use ports 5556, 5557, and 5558 for pi4-2, pi4-3, and pi4-4 respectively.
+
+# Terminal 1: start pi4-1, connect over SSH, and start its MQTT replay.
+cd /home/danhlearndev/Personal/MUGVN-hackathon/simulate-rp4/qemu-raspbian
+make ssh-pi4-1
+# After SSH login, run these commands inside pi4-1:
+cd /home/pi/telemetry-replay
+python3 emit_environment_data.py
+
+# Terminal 2: start pi4-2, connect over SSH, and start its MQTT replay.
+cd /home/danhlearndev/Personal/MUGVN-hackathon/simulate-rp4/qemu-raspbian
+make ssh-pi4-2
+# After SSH login, run these commands inside pi4-2:
+cd /home/pi/telemetry-replay
+python3 emit_environment_data.py
+
+# Terminal 3: start pi4-3, connect over SSH, and start its MQTT replay.
+cd /home/danhlearndev/Personal/MUGVN-hackathon/simulate-rp4/qemu-raspbian
+make ssh-pi4-3
+# After SSH login, run these commands inside pi4-3:
+cd /home/pi/telemetry-replay
+python3 emit_environment_data.py
+
+# Terminal 4: start pi4-4, connect over SSH, and start its MQTT replay.
+cd /home/danhlearndev/Personal/MUGVN-hackathon/simulate-rp4/qemu-raspbian
+make ssh-pi4-4
+# After SSH login, run these commands inside pi4-4:
+cd /home/pi/telemetry-replay
+python3 emit_environment_data.py
+
+# Optional host commands (run from qemu-raspbian):
+# make status
+# make stop-all

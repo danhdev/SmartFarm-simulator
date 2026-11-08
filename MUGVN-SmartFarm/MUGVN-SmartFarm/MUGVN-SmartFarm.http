@@ -1,0 +1,52 @@
+@baseUrl = https://localhost:7017
+# Paste a Keycloak access token from your authenticated demo session or API client.
+@token = paste-access-token
+
+### Device list
+GET {{baseUrl}}/api/devices
+Authorization: Bearer {{token}}
+
+### Device details
+GET {{baseUrl}}/api/devices/pi4-1
+Authorization: Bearer {{token}}
+
+### Register a new device (choose an unused source node)
+POST {{baseUrl}}/api/devices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"device_id":"pi4-5","node_id":99,"label":"Additional Pi","reporting_interval_seconds":300}
+
+### Edit metadata; source node cannot be changed
+PATCH {{baseUrl}}/api/devices/pi4-5
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"label":"North field","enabled":false}
+
+### Decommission; history is preserved
+DELETE {{baseUrl}}/api/devices/pi4-5
+Authorization: Bearer {{token}}
+
+### Latest source-time readings
+GET {{baseUrl}}/api/telemetry/latest?deviceIds=pi4-1,pi4-2,pi4-3,pi4-4
+Authorization: Bearer {{token}}
+
+### Source-time history: inclusive from, exclusive to. URL-encode next_cursor when paging.
+GET {{baseUrl}}/api/devices/pi4-1/telemetry/history?from=2025-07-24T00:00:00Z&to=2025-07-25T00:00:00Z&limit=100
+Authorization: Bearer {{token}}
+
+### Hourly averages; change interval to day for daily buckets
+GET {{baseUrl}}/api/devices/pi4-1/telemetry/aggregates?from=2025-07-24T00:00:00Z&to=2025-07-25T00:00:00Z&interval=hour
+Authorization: Bearer {{token}}
+
+### Storage and live notification status
+GET {{baseUrl}}/api/status
+Authorization: Bearer {{token}}
+
+### Expected 404 Problem Details
+GET {{baseUrl}}/api/devices/nonexistent-device
+Authorization: Bearer {{token}}
+
+### Liveness (no authentication)
+GET {{baseUrl}}/health/live

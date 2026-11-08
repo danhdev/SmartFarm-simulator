@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultNoneItems>false</EnableDefaultNoneItems></PropertyGroup>
+  <ItemGroup><PackageReference Include="Datadog.Trace" Version="3.57.0" /><ProjectReference Include="../Contracts/SmartFarm.Contracts.csproj" /><PackageReference Include="MongoDB.Driver" Version="3.13.0" /><PackageReference Include="StackExchange.Redis" Version="2.8.31" /><PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" /><PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" /><PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" /><PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" /></ItemGroup>
+</Project>

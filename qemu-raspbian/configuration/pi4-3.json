@@ -1,0 +1,18 @@
+{
+  "node_id": 24,
+  "csv_filename": "environment_data_2025-07-24_clean.csv",
+  "state_db_filename": "replay_state.sqlite3",
+  "interval_seconds": 300,
+  "start_position": 1,
+  "end_position": 288,
+  "reset": true,
+  "mqtt": {
+    "host": "10.0.2.2",
+    "port": 1883,
+    "topic_prefix": "mugvn/farm",
+    "qos": 1,
+    "keepalive_seconds": 60,
+    "reconnect_initial_seconds": 1,
+    "reconnect_max_seconds": 60
+  }
+}
